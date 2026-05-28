@@ -72,8 +72,6 @@ Fully responsive design built with ShadCN/UI — track expenses from your phone 
 
 ### Docker Compose (Recommended)
 ```yaml
-version: "3.8"
-
 services:
   savvy:
     image: truenormis/savvy:latest
@@ -86,6 +84,12 @@ services:
     environment:
       - APP_URL=https://savvy.yourdomain.com
       - TZ=Europe/Kyiv
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/livez"]
+      interval: 10s
+      timeout: 3s
+      start_period: 60s
+      retries: 3
 
 volumes:
   savvy-data:
@@ -97,10 +101,24 @@ volumes:
 |-----------|-----------------------------|--------------------|
 | `APP_URL` | Public URL of your instance | `http://localhost` |
 | `TZ`      | Timezone                    | `UTC`              |
+
+### Behind a Reverse Proxy
+
+Set `APP_URL` to your public `https://` URL. Savvy honors the `X-Forwarded-Proto` and `X-Forwarded-For` headers from the proxy, so HTTPS link generation and real client IPs work automatically — no extra configuration needed.
+
+### Health Checks
+
+Two probe endpoints are exposed for orchestrators and uptime monitoring (responses use the IETF `application/health+json` format):
+
+| Endpoint  | Purpose                                                                     | Healthy | Unhealthy |
+|-----------|-----------------------------------------------------------------------------|---------|-----------|
+| `/livez`  | Liveness — the app process is up. Use it for container restart decisions.   | `200`   | —         |
+| `/readyz` | Readiness — database is reachable and migrations are applied. Gate traffic. | `200`   | `503`     |
+
+`/livez` stays up during maintenance mode; `/readyz` returns `503` so traffic drains while the instance is not ready.
+
 ### With Traefik (HTTPS)
 ```yaml
-version: "3.8"
-
 services:
   savvy:
     image: truenormis/savvy:latest
@@ -132,8 +150,6 @@ networks:
 
 1. Run Savvy on internal port:
 ```yaml
-version: "3.8"
-
 services:
   savvy:
     image: truenormis/savvy:latest
@@ -160,7 +176,22 @@ networks:
 
 ### Kubernetes
 
-Savvy works out of the box on Kubernetes. Deploy as a single-pod Deployment with a PersistentVolumeClaim mounted at `/data`. Helm chart coming soon.
+Deploy as a single-replica `Deployment` with a `PersistentVolumeClaim` mounted at `/data`. SQLite is single-writer, so use `strategy: { type: Recreate }`. The container runs as non-root (`www-data`, uid 82) — grant `NET_BIND_SERVICE` so it can bind port 80. Wire the probes to the health endpoints:
+
+```yaml
+        startupProbe:
+          httpGet: { path: /livez, port: 80 }
+          periodSeconds: 3
+          failureThreshold: 30
+        livenessProbe:
+          httpGet: { path: /livez, port: 80 }
+          periodSeconds: 10
+        readinessProbe:
+          httpGet: { path: /readyz, port: 80 }
+          periodSeconds: 10
+```
+
+Helm chart coming soon.
 
 ## 🔄 Updating
 ```bash
@@ -174,20 +205,30 @@ Your data is safe in the `/data` volume.
 
 Backups can be managed directly from the UI (Settings → Backups).
 
+> [!WARNING]
+> The database runs in **WAL mode**, so recent writes may still live in the `database.sqlite-wal` file and **won't be in `database.sqlite` yet**. Copying `database.sqlite` alone can silently lose the latest data. Always checkpoint the WAL into the main file first (or use the in-app backup, which handles this for you).
+
 Manual backup:
 ```bash
+# Fold the WAL into the main file, then copy
+docker exec savvy php artisan tinker --execute="DB::statement('PRAGMA wal_checkpoint(TRUNCATE);');"
 docker cp savvy:/data/database.sqlite ./backup-$(date +%Y%m%d).sqlite
 ```
 
-Restore:
+Restore (stop writers first so the WAL doesn't fight the swap):
 ```bash
+docker compose down
 docker cp ./backup.sqlite savvy:/data/database.sqlite
-docker restart savvy
+docker compose up -d
 ```
 
 ## 🔒 Privacy
 
 Your data stays with you. SQLite database stored in `/data` volume — no external services required.
+
+## ⚙️ How It Works
+
+One container runs everything under Supervisor — Nginx, PHP-FPM, the scheduler (recurring transactions, automatic exchange-rate updates) and a queue worker for background jobs. SQLite lives in `/data`; no external database, cache, or queue service is required. Migrations run automatically on startup.
 
 ## 🛠 Stack
 
