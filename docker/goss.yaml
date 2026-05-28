@@ -1,7 +1,17 @@
 http:
-  '{{.Vars.base}}/up':
+  '{{.Vars.base}}/livez':
     status: 200
     timeout: 10000
+    body:
+      - '"status": "pass"'
+
+  '{{.Vars.base}}/readyz':
+    status: 200
+    timeout: 10000
+    body:
+      - '"status": "pass"'
+      - 'sqlite:connectivity'
+      - 'schema:migrations'
 
   '{{.Vars.base}}/':
     status: 200

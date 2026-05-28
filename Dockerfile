@@ -16,6 +16,8 @@ COPY . .
 RUN composer dump-autoload --optimize
 
 FROM php:8.4-fpm-alpine
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
 
 # hadolint ignore=DL3018
 RUN apk upgrade --no-cache \
