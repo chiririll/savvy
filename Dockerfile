@@ -8,7 +8,7 @@ COPY resources ./resources
 COPY vite.config.ts ./
 RUN npm run build
 
-FROM composer:latest AS backend
+FROM composer:2.8 AS backend
 WORKDIR /app
 COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-scripts --no-autoloader
@@ -17,9 +17,16 @@ RUN composer dump-autoload --optimize
 
 FROM php:8.4-fpm-alpine
 
-RUN apk add --no-cache nginx supervisor sqlite \
-    && apk add --no-cache --virtual .build-deps sqlite-dev \
+# apk upgrade тянет security-патчи OS-пакетов (в т.ч. nginx) на каждом билде.
+# setcap даёт nginx право биндить :80 без root — контейнер крутится из-под www-data.
+# DL3018 игнорим осознанно: версии OS-пакетов НЕ пиним, иначе apk upgrade выше
+# не сможет подтянуть security-патчи (пин и патчинг противоречат друг другу).
+# hadolint ignore=DL3018
+RUN apk upgrade --no-cache \
+    && apk add --no-cache nginx supervisor sqlite \
+    && apk add --no-cache --virtual .build-deps sqlite-dev libcap \
     && docker-php-ext-install pdo pdo_sqlite bcmath \
+    && setcap 'cap_net_bind_service=+ep' /usr/sbin/nginx \
     && apk del .build-deps \
     && rm -rf /var/cache/apk/* /tmp/*
 
@@ -40,8 +47,10 @@ COPY --from=backend /app/composer.json ./composer.json
 COPY --from=frontend /app/public/build ./public/build
 
 RUN chown -R www-data:www-data /var/www/html \
+    && chown -R www-data:www-data /var/lib/nginx /var/log/nginx \
     && mkdir -p /data && chown -R www-data:www-data /data
 
+COPY docker/nginx-main.conf /etc/nginx/nginx.conf
 COPY docker/nginx.conf /etc/nginx/http.d/default.conf
 COPY docker/supervisord.conf /etc/supervisord.conf
 COPY docker/entrypoint.sh /entrypoint.sh
@@ -49,4 +58,8 @@ RUN chmod +x /entrypoint.sh
 
 VOLUME /data
 EXPOSE 80
+# Контейнер работает из-под non-root: nginx биндит :80 через file-capability,
+# php-fpm/supervisord/scheduler — все www-data. /data (анонимный volume)
+# наследует www-data-овнершип из образа.
+USER www-data
 ENTRYPOINT ["/entrypoint.sh"]
