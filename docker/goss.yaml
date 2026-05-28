@@ -1,0 +1,46 @@
+http:
+  '{{.Vars.base}}/livez':
+    status: 200
+    timeout: 10000
+    body:
+      - '"status":"pass"'
+
+  '{{.Vars.base}}/readyz':
+    status: 200
+    timeout: 10000
+    body:
+      - '"status":"pass"'
+      - 'sqlite:connectivity'
+      - 'schema:migrations'
+
+  '{{.Vars.base}}/':
+    status: 200
+    timeout: 10000
+    body:
+      - 'Savvy'
+      - '/build/assets/'
+
+  '{{.Vars.base}}/api/auth/status':
+    status: 200
+    timeout: 10000
+
+  proxy-empty-forwarded-host:
+    url: '{{.Vars.base}}/'
+    request-headers:
+      - 'X-Forwarded-Host: '
+    status: 200
+    timeout: 10000
+
+  proxy-spoofed-forwarded-host:
+    url: '{{.Vars.base}}/'
+    request-headers:
+      - 'X-Forwarded-Host: evil.example.com'
+    status: 200
+    timeout: 10000
+
+  proxy-forwarded-proto-chain:
+    url: '{{.Vars.base}}/'
+    request-headers:
+      - 'X-Forwarded-Proto: https, http'
+    status: 200
+    timeout: 10000
