@@ -1,16 +1,8 @@
-# Smoke/boundary-контракт запущенного контейнера.
-# Гоняется goss-ом по опубликованному порту (по умолчанию localhost:8081).
-# Покрывает то, до чего Pest не достаёт: реальный nginx + php-fpm + entrypoint.
-#
-# Запуск:  goss -g docker/goss.yaml --vars docker/goss-vars.yaml validate
-# (или прокинуть BASE через --vars; см. docker/run-goss.sh)
 http:
-  # Health-check: контейнер встал, миграции/кеши прошли.
   '{{.Vars.base}}/up':
     status: 200
     timeout: 10000
 
-  # SPA-индекс отдаётся и ссылается на собранные ассеты (фронт реально вкомпилен).
   '{{.Vars.base}}/':
     status: 200
     timeout: 10000
@@ -18,14 +10,10 @@ http:
       - 'Savvy'
       - '/build/assets/'
 
-  # Публичный API отвечает.
   '{{.Vars.base}}/api/auth/status':
     status: 200
     timeout: 10000
 
-  # --- boundary-регрессия на proxy-заголовки (symfony getPort / trustProxies '*') ---
-  # Пустой X-Forwarded-Host не должен ронять getPort (был 500 на КАЖДОМ запросе,
-  # т.к. nginx инжектил пустой forwarded-host без if_not_empty).
   proxy-empty-forwarded-host:
     url: '{{.Vars.base}}/'
     request-headers:
@@ -33,7 +21,6 @@ http:
     status: 200
     timeout: 10000
 
-  # Спуфнутый forwarded-host тоже только парсится, но не валит приложение.
   proxy-spoofed-forwarded-host:
     url: '{{.Vars.base}}/'
     request-headers:
@@ -41,7 +28,6 @@ http:
     status: 200
     timeout: 10000
 
-  # Цепочка X-Forwarded-Proto от нескольких хопов — не 500.
   proxy-forwarded-proto-chain:
     url: '{{.Vars.base}}/'
     request-headers:

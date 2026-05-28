@@ -1,7 +1,4 @@
 #!/bin/sh
-# Контейнер запускается из-под www-data (USER в Dockerfile), поэтому здесь НЕТ
-# chown — non-root не может менять овнершип. Файлы приложения и /data уже
-# принадлежат www-data (chown на этапе сборки + анонимный volume наследует это).
 set -eu
 
 DATA_DIR=/data

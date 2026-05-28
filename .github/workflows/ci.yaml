@@ -44,8 +44,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Собираем под архитектуру раннера (amd64) и грузим в локальный docker,
-      # чтобы тут же прогнать по нему контракт. Multi-arch push живёт в docker.yaml.
       - name: Build image
         uses: docker/build-push-action@v5
         with:
@@ -63,7 +61,6 @@ jobs:
           sudo curl -fsSL "https://github.com/goss-org/goss/releases/download/${GOSS_VERSION}/goss-linux-amd64" -o /usr/local/bin/goss
           sudo chmod +x /usr/local/bin/goss
 
-      # --retry-timeout ждёт, пока энтрипоинт догонит миграции/кеши.
       - name: Run goss contract
         env:
           GOSS_USE_ALPHA: '1'
@@ -89,7 +86,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Только читаем gha-кеш (cache-to пишет job `image`, чтобы не было гонки записи).
       - name: Build image
         uses: docker/build-push-action@v5
         with:
@@ -98,11 +94,8 @@ jobs:
           tags: savvy:ci
           cache-from: type=gha
 
-      # Жёсткий гейт: фиксящиеся MEDIUM/HIGH/CRITICAL в OS-пакетах и зависимостях
-      # (composer/npm) + скан на вшитые секреты. ignore-unfixed оставлен, чтобы не
-      # падать на дырах без апстрим-фикса (их не закрыть бампом).
       - name: Trivy vulnerability + secret scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: savvy:ci
           format: table
@@ -118,17 +111,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Линт Dockerfile: пиннинг версий, мусор в слоях, плохие практики apk и т.д.
       - name: Hadolint
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: Dockerfile
           failure-threshold: warning
 
-      # Security-misconfig (блокирующий): контейнер теперь non-root, так что
-      # DS-0002 проходит. Любой новый HIGH/CRITICAL misconfig в Dockerfile завалит CI.
       - name: Trivy config (misconfig)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: Dockerfile

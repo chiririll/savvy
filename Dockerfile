@@ -17,10 +17,6 @@ RUN composer dump-autoload --optimize
 
 FROM php:8.4-fpm-alpine
 
-# apk upgrade тянет security-патчи OS-пакетов (в т.ч. nginx) на каждом билде.
-# setcap даёт nginx право биндить :80 без root — контейнер крутится из-под www-data.
-# DL3018 игнорим осознанно: версии OS-пакетов НЕ пиним, иначе apk upgrade выше
-# не сможет подтянуть security-патчи (пин и патчинг противоречат друг другу).
 # hadolint ignore=DL3018
 RUN apk upgrade --no-cache \
     && apk add --no-cache nginx supervisor sqlite \
@@ -58,8 +54,5 @@ RUN chmod +x /entrypoint.sh
 
 VOLUME /data
 EXPOSE 80
-# Контейнер работает из-под non-root: nginx биндит :80 через file-capability,
-# php-fpm/supervisord/scheduler — все www-data. /data (анонимный volume)
-# наследует www-data-овнершип из образа.
 USER www-data
 ENTRYPOINT ["/entrypoint.sh"]
