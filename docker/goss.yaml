@@ -3,13 +3,13 @@ http:
     status: 200
     timeout: 10000
     body:
-      - '"status": "pass"'
+      - '"status":"pass"'
 
   '{{.Vars.base}}/readyz':
     status: 200
     timeout: 10000
     body:
-      - '"status": "pass"'
+      - '"status":"pass"'
       - 'sqlite:connectivity'
       - 'schema:migrations'
 
